@@ -1,0 +1,159 @@
+protected List<Map<String, Object>> getNewVmPlacement(
+	 
+			List<? extends Vm> vmsToMigrate,
+			Set<? extends Host> excludedHosts) {
+		List<Map<String, Object>> migrationMap = new LinkedList<Map<String, Object>>();
+		PowerVmList.sortByCpuUtilization(vmsToMigrate);
+		
+		List<PowerVm> list = new ArrayList<PowerVm>();
+		list.addAll(list);
+		
+		double size = vmsToMigrate.size();
+		double sum=0;
+		double avgUtilization;
+		
+		List<PowerVm> vmList1=new ArrayList<PowerVm>();
+		List<PowerVm> vmList2=new ArrayList<PowerVm>();
+		
+		for (PowerVm vm : list) {
+			double cpuUtilization;
+			cpuUtilization = vm.getCloudletScheduler().getTotalUtilizationOfCpu(CloudSim.clock());
+			sum=sum+cpuUtilization;
+			
+		}
+		avgUtilization = sum/size;
+		
+		for (PowerVm vm : list)
+		{
+			double cpuUtilization;
+			cpuUtilization = vm.getCloudletScheduler().getTotalUtilizationOfCpu(CloudSim.clock());
+			if ( cpuUtilization < avgUtilization)
+			{
+				vmList1.add(vm);
+			}
+			else 
+				vmList2.add(vm);	
+		}
+		
+		
+		for (Vm vm : vmList1) {
+			PowerHost allocatedHost = findHostForVm(vm, excludedHosts, 0);
+			if (allocatedHost != null) {
+				allocatedHost.vmCreate(vm);
+				Log.printConcatLine("VM #", vm.getId(), " allocated to host #", allocatedHost.getId());
+
+				Map<String, Object> migrate = new HashMap<String, Object>();
+				migrate.put("vm", vm);
+				migrate.put("host", allocatedHost);
+				migrationMap.add(migrate);
+			}
+		}
+		
+		for (Vm vm : vmList2) {
+			PowerHost allocatedHost = findHostForVm(vm, excludedHosts, 1);
+			if (allocatedHost != null) {
+				allocatedHost.vmCreate(vm);
+				Log.printConcatLine("VM #", vm.getId(), " allocated to host #", allocatedHost.getId());
+
+				Map<String, Object> migrate = new HashMap<String, Object>();
+				migrate.put("vm", vm);
+				migrate.put("host", allocatedHost);
+				migrationMap.add(migrate);
+			}
+		}
+		
+		
+		return migrationMap;
+	}
+public PowerHost findHostForVm(Vm vm, Set<? extends Host> excludedHosts, int type) {
+		 
+		 
+			PowerHost allocatedHost = null;
+//			PowerHost inactiveHost = null;
+			
+		 List<PowerHost> hostList = new ArrayList<PowerHost>();
+			//hostList.addAll(getHostList());
+			
+		for(PowerHost ph: this.<PowerHost> getHostList()) {
+			if (!excludedHosts.contains(ph) && ph.isSuitableForVm(vm))
+				hostList.add(ph);
+		}
+		
+		List<PowerHost> hostList1=new ArrayList<PowerHost>();
+		List<PowerHost> hostList2=new ArrayList<PowerHost>();
+		
+		
+
+		//average utilization of Hosts
+		double avgUtilHosts = averageUtilizationOfHosts(hostList);
+		double avgPowerUtil = averagePowerOfHosts(hostList);
+		
+		
+		for (PowerHost host : this.<PowerHost> getHostList()) {
+			if (excludedHosts.contains(host)) {
+				continue;
+			}
+			
+			double cpuUtilization;
+			double powerUtilization ;
+			
+			cpuUtilization=host.getUtilizationOfCpu()/host.getAvailableMips();
+			powerUtilization=host.getTotalMips()/ host.getMaxPower();
+			
+			if ( (cpuUtilization < avgUtilHosts) )
+			{
+				hostList1.add(host);
+			}
+			else 
+				hostList2.add(host);
+			
+		}
+		
+		if(type == 0) {
+			for (PowerHost host : hostList1) {
+				if (getUtilizationOfCpuMips(host) != 0 && isHostOverUtilizedAfterAllocation(host, vm)) {
+					continue;
+				}
+				try {
+					
+					double cpuUtilization;
+					//double minCPU = Double.MAX_VALUE;
+					cpuUtilization=host.getUtilizationOfCpu()/host.getAvailableMips();
+					if ( cpuUtilization < avgUtilHosts)
+					{
+						avgUtilHosts=cpuUtilization;
+						allocatedHost=host;
+					}
+					
+				}
+				catch (Exception e) {
+					
+				}
+			}
+		}
+		else {
+			for (PowerHost host : hostList2) {
+				if (getUtilizationOfCpuMips(host) != 0 && isHostOverUtilizedAfterAllocation(host, vm)) {
+					continue;
+				}
+				try {
+					
+					//double minPower=Double.MAX_VALUE;
+					double powerUtilization = host.getTotalMips() / host.getMaxPower();
+					if (powerUtilization < avgPowerUtil )
+					{
+						 avgPowerUtil=powerUtilization ;
+						 allocatedHost=host;
+					}
+					
+					
+				}
+				catch (Exception e) {
+					
+				}
+			}
+		}
+		
+		
+		return allocatedHost;
+	}
